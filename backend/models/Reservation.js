@@ -44,13 +44,7 @@ const reservationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Validate check-out > check-in
-reservationSchema.pre("save", function (next) {
-  if (this.checkOutDate <= this.checkInDate) {
-    return next(new Error("Check-out date must be after check-in date"));
-  }
-  next();
-});
+// No pre-save hooks - validation is handled in express-validator and controller
 
 const Reservation = mongoose.model("Reservation", reservationSchema);
 export default Reservation;

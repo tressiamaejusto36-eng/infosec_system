@@ -3,15 +3,22 @@ import dotenv from "dotenv";
 import helmet from "helmet";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import path from "path";
+import { fileURLToPath } from 'url';
 import connectDB from "./db.js";
 import { globalLimiter } from "./middlewares/rateLimiter.js";
 import errorHandler from "./middlewares/errorHandler.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Routes
 import authRoutes from "./routes/authRoutes.js";
 import roomRoutes from "./routes/roomRoutes.js";
 import reservationRoutes from "./routes/reservationRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
+import inventoryRoutes from "./routes/inventoryRoutes.js";
 
 dotenv.config();
 
@@ -30,6 +37,10 @@ app.use(globalLimiter);
 app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(cookieParser());
+
+// ─── Static Files ────────────────────────────────────────────
+// Serve uploaded images
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ─── Data Sanitization ───────────────────────────────────────
 // Custom NoSQL injection prevention
@@ -102,6 +113,8 @@ app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/users", userRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/inventory", inventoryRoutes);
 
 // ─── Health Check ─────────────────────────────────────────────
 app.get("/api/health", (req, res) => {

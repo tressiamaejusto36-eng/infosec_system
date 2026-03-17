@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
-import { BedDouble, Users, DollarSign, Star } from "lucide-react";
+import { BedDouble, Users, DollarSign, Star, Image } from "lucide-react";
 
 const roomTypeColors = {
   Standard: "secondary",
@@ -14,14 +14,44 @@ const roomTypeColors = {
 export default function RoomCard({ room }) {
   const badgeVariant = roomTypeColors[room.roomType] || "default";
   const isAvailable = room.status === "available";
+  const hasImages = room.images && room.images.length > 0;
+  const primaryImage = hasImages ? room.images[0] : null;
 
   return (
     <Card className="group overflow-hidden hover:border-white/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
-      {/* Room image placeholder */}
+      {/* Room image */}
       <div className="relative h-48 bg-gradient-to-br from-blue-900/40 to-indigo-900/40 overflow-hidden">
-        <div className="absolute inset-0 flex items-center justify-center">
-          <BedDouble className="w-16 h-16 text-white/10 group-hover:scale-110 transition-transform duration-500" />
-        </div>
+        {hasImages ? (
+          <>
+            <img 
+              src={`http://localhost:5000${primaryImage}`} 
+              alt={`${room.roomType} Room ${room.roomNumber}`}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+              onError={(e) => {
+                // Fallback to placeholder if image fails to load
+                e.target.style.display = 'none';
+                e.target.nextSibling.style.display = 'flex';
+              }}
+            />
+            <div className="absolute inset-0 hidden items-center justify-center bg-gradient-to-br from-blue-900/40 to-indigo-900/40">
+              <BedDouble className="w-16 h-16 text-white/10 group-hover:scale-110 transition-transform duration-500" />
+            </div>
+            {/* Image count indicator */}
+            {room.images.length > 1 && (
+              <div className="absolute bottom-3 right-3">
+                <span className="flex items-center gap-1 text-white/80 text-xs font-medium bg-black/50 px-2 py-1 rounded-full">
+                  <Image className="w-3 h-3" />
+                  {room.images.length}
+                </span>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <BedDouble className="w-16 h-16 text-white/10 group-hover:scale-110 transition-transform duration-500" />
+          </div>
+        )}
+        
         {/* Status badge overlay */}
         <div className="absolute top-3 right-3">
           <span
@@ -34,6 +64,7 @@ export default function RoomCard({ room }) {
             {isAvailable ? "Available" : "Reserved"}
           </span>
         </div>
+        
         {/* Room number */}
         <div className="absolute bottom-3 left-3">
           <span className="text-white/60 text-xs font-mono bg-black/30 px-2 py-0.5 rounded">

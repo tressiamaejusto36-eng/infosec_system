@@ -18,7 +18,7 @@ dotenv.config();
 
 const adminCredentials = {
   name: 'Admin User',
-  email: 'dumasmackie@gmail.com',
+  email: 'ttisyamaee@gmail.com',
   password: 'dimahack123',
   role: 'admin'
 };

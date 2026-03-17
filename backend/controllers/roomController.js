@@ -1,7 +1,13 @@
 import { body } from "express-validator";
 import mongoose from "mongoose";
+import path from "path";
+import fs from "fs";
+import { fileURLToPath } from 'url';
 import Room from "../models/Room.js";
 import { validateQueryParams } from "../utils/security.js";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // ─── Validation Rules ─────────────────────────────────────────
 export const roomValidation = [
@@ -194,9 +200,141 @@ export const deleteRoom = async (req, res, next) => {
     if (!room) {
       return res.status(404).json({ success: false, message: "Room not found." });
     }
+
+    // Delete associated images
+    if (room.images && room.images.length > 0) {
+      room.images.forEach(imagePath => {
+        const fullPath = path.join(__dirname, '..', imagePath);
+        if (fs.existsSync(fullPath)) {
+          fs.unlinkSync(fullPath);
+        }
+      });
+    }
+
     res.status(200).json({
       success: true,
       message: "Room deleted successfully.",
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── Upload Room Images (Admin) ────────────────────────────────
+export const uploadRoomImages = async (req, res, next) => {
+  try {
+    console.log('🖼️ Image upload request received for room:', req.params.id);
+    console.log('📁 Files received:', req.files?.length || 0);
+    
+    // Validate MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      console.log('❌ Invalid room ID format:', req.params.id);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid room ID format.",
+      });
+    }
+
+    const room = await Room.findById(req.params.id);
+    if (!room) {
+      console.log('❌ Room not found:', req.params.id);
+      return res.status(404).json({ success: false, message: "Room not found." });
+    }
+
+    console.log('✅ Room found:', room.roomNumber, 'Current images:', room.images?.length || 0);
+
+    if (!req.files || req.files.length === 0) {
+      console.log('❌ No files in request');
+      return res.status(400).json({
+        success: false,
+        message: "No images uploaded.",
+      });
+    }
+
+    // Generate image URLs
+    const imageUrls = req.files.map(file => {
+      const url = `/uploads/rooms/${file.filename}`;
+      console.log('📄 Generated URL:', url, 'for file:', file.filename);
+      return url;
+    });
+    
+    // Add new images to existing ones (max 5 total)
+    const updatedImages = [...(room.images || []), ...imageUrls].slice(0, 5);
+    console.log('📋 Updated images array:', updatedImages);
+    
+    room.images = updatedImages;
+    await room.save();
+    console.log('✅ Room saved with images');
+
+    res.status(200).json({
+      success: true,
+      message: "Images uploaded successfully.",
+      data: {
+        images: updatedImages,
+        uploadedCount: req.files.length
+      }
+    });
+  } catch (error) {
+    console.error('❌ Upload error:', error);
+    // Clean up uploaded files on error
+    if (req.files) {
+      req.files.forEach(file => {
+        const filePath = file.path;
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      });
+    }
+    next(error);
+  }
+};
+
+// ─── Delete Room Image (Admin) ─────────────────────────────────
+export const deleteRoomImage = async (req, res, next) => {
+  try {
+    // Validate MongoDB ObjectId
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid room ID format.",
+      });
+    }
+
+    const { imageUrl } = req.body;
+    if (!imageUrl) {
+      return res.status(400).json({
+        success: false,
+        message: "Image URL is required.",
+      });
+    }
+
+    const room = await Room.findById(req.params.id);
+    if (!room) {
+      return res.status(404).json({ success: false, message: "Room not found." });
+    }
+
+    // Remove image from array
+    const imageIndex = room.images.indexOf(imageUrl);
+    if (imageIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "Image not found in room.",
+      });
+    }
+
+    room.images.splice(imageIndex, 1);
+    await room.save();
+
+    // Delete physical file
+    const imagePath = path.join(__dirname, '..', imageUrl);
+    if (fs.existsSync(imagePath)) {
+      fs.unlinkSync(imagePath);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Image deleted successfully.",
+      data: { images: room.images }
     });
   } catch (error) {
     next(error);

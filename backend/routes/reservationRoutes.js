@@ -17,6 +17,9 @@ router.use(authMiddleware);
 
 // User routes
 router.post("/", reservationValidation, validate, createReservation);
+router.post("/validate-test", reservationValidation, validate, (req, res) => {
+  res.json({ success: true, message: "Validation passed", data: req.body });
+});
 router.get("/my", getUserReservations);
 router.patch("/:id/cancel", cancelReservation);
 

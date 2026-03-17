@@ -10,7 +10,7 @@ import {
 } from "../components/ui/dialog";
 import {
   BedDouble, Users, DollarSign, CalendarCheck,
-  ArrowLeft, CheckCircle, AlertCircle
+  ArrowLeft, CheckCircle, AlertCircle, ChevronLeft, ChevronRight, Image
 } from "lucide-react";
 import api from "../lib/api";
 import toast from "react-hot-toast";
@@ -27,6 +27,7 @@ export default function BookRoom() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [booking, setBooking] = useState(false);
   const [error, setError] = useState("");
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     api.get(`/rooms/${id}`)
@@ -48,21 +49,61 @@ export default function BookRoom() {
   const handleBook = async () => {
     setError("");
     setBooking(true);
+    
+    console.log('🎯 Starting booking process...');
+    console.log('📅 Booking data:', {
+      roomId: id,
+      checkInDate: checkIn,
+      checkOutDate: checkOut,
+      guestCount,
+      specialRequests,
+      nights,
+      totalPrice
+    });
+    
     try {
-      await api.post("/reservations", {
+      const response = await api.post("/reservations", {
         roomId: id,
         checkInDate: checkIn,
         checkOutDate: checkOut,
         guestCount,
         specialRequests,
       });
+      
+      console.log('✅ Booking successful:', response.data);
       toast.success("Reservation confirmed!");
       navigate("/my-reservations");
     } catch (err) {
-      setError(err.response?.data?.message || "Booking failed. Please try again.");
+      console.error('❌ Booking error:', err);
+      console.error('❌ Error response:', err.response?.data);
+      
+      let errorMessage = "Booking failed. Please try again.";
+      
+      if (err.response?.data) {
+        if (err.response.data.errors && Array.isArray(err.response.data.errors)) {
+          // Show specific validation errors
+          errorMessage = err.response.data.errors.join(', ');
+        } else if (err.response.data.message) {
+          errorMessage = err.response.data.message;
+        }
+      }
+      
+      setError(errorMessage);
     } finally {
       setBooking(false);
       setShowConfirm(false);
+    }
+  };
+
+  const nextImage = () => {
+    if (room?.images?.length > 1) {
+      setCurrentImageIndex((prev) => (prev + 1) % room.images.length);
+    }
+  };
+
+  const prevImage = () => {
+    if (room?.images?.length > 1) {
+      setCurrentImageIndex((prev) => (prev - 1 + room.images.length) % room.images.length);
     }
   };
 
@@ -73,6 +114,7 @@ export default function BookRoom() {
   if (!room) return null;
 
   const canBook = room.status === "available" && checkIn && checkOut && nights > 0;
+  const hasImages = room.images && room.images.length > 0;
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
@@ -83,9 +125,72 @@ export default function BookRoom() {
       <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
         {/* Room Info */}
         <Card className="md:col-span-3 border-white/10">
-          <div className="h-48 bg-gradient-to-br from-blue-900/50 to-indigo-900/50 rounded-t-xl flex items-center justify-center">
-            <BedDouble className="w-20 h-20 text-white/10" />
+          {/* Room Image Gallery */}
+          <div className="relative h-48 bg-gradient-to-br from-blue-900/50 to-indigo-900/50 rounded-t-xl overflow-hidden">
+            {hasImages ? (
+              <>
+                <img 
+                  src={`http://localhost:5000${room.images[currentImageIndex]}`} 
+                  alt={`${room.roomType} Room ${room.roomNumber} - Image ${currentImageIndex + 1}`}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback to placeholder if image fails to load
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'flex';
+                  }}
+                />
+                <div className="absolute inset-0 hidden items-center justify-center bg-gradient-to-br from-blue-900/50 to-indigo-900/50">
+                  <BedDouble className="w-20 h-20 text-white/10" />
+                </div>
+                
+                {/* Navigation arrows */}
+                {room.images.length > 1 && (
+                  <>
+                    <button
+                      onClick={prevImage}
+                      className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-all"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={nextImage}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 w-8 h-8 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center text-white/80 hover:text-white transition-all"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+                
+                {/* Image indicators */}
+                {room.images.length > 1 && (
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
+                    {room.images.map((_, index) => (
+                      <button
+                        key={index}
+                        onClick={() => setCurrentImageIndex(index)}
+                        className={`w-2 h-2 rounded-full transition-all ${
+                          index === currentImageIndex ? 'bg-white' : 'bg-white/40'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+                
+                {/* Image count */}
+                <div className="absolute top-3 left-3">
+                  <span className="flex items-center gap-1 text-white/80 text-xs font-medium bg-black/50 px-2 py-1 rounded-full">
+                    <Image className="w-3 h-3" />
+                    {currentImageIndex + 1} / {room.images.length}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <BedDouble className="w-20 h-20 text-white/10" />
+              </div>
+            )}
           </div>
+          
           <CardContent className="p-5 space-y-4">
             <div className="flex items-start justify-between">
               <div>

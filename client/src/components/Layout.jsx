@@ -3,16 +3,25 @@ import { useAuth } from "../context/AuthContext";
 import { Button } from "./ui/button";
 import {
   Hotel, LogOut, LayoutDashboard, BedDouble,
-  CalendarCheck, User, ShieldCheck, Menu, X
+  CalendarCheck, User, ShieldCheck, Menu, X,
+  BarChart3, Package, Users
 } from "lucide-react";
 import { useState } from "react";
 
-const navLinks = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, adminOnly: false },
-  { to: "/rooms", label: "Rooms", icon: BedDouble, adminOnly: false },
-  { to: "/my-reservations", label: "My Reservations", icon: CalendarCheck, adminOnly: false },
-  { to: "/profile", label: "Profile", icon: User, adminOnly: false },
-  { to: "/admin", label: "Admin Panel", icon: ShieldCheck, adminOnly: true },
+const customerNavLinks = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/rooms", label: "Rooms", icon: BedDouble },
+  { to: "/my-reservations", label: "My Reservations", icon: CalendarCheck },
+  { to: "/profile", label: "Profile", icon: User },
+];
+
+const adminNavLinks = [
+  { to: "/admin?tab=analytics", label: "Analytics", icon: BarChart3 },
+  { to: "/admin?tab=rooms", label: "Room Management", icon: BedDouble },
+  { to: "/admin?tab=reservations", label: "Reservations", icon: CalendarCheck },
+  { to: "/admin?tab=inventory", label: "Inventory", icon: Package },
+  { to: "/admin?tab=users", label: "User Management", icon: Users },
+  { to: "/profile", label: "Profile", icon: User },
 ];
 
 export default function Layout({ children }) {
@@ -26,7 +35,7 @@ export default function Layout({ children }) {
     navigate("/login");
   };
 
-  const filteredLinks = navLinks.filter(l => !l.adminOnly || isAdmin);
+  const navLinks = isAdmin ? adminNavLinks : customerNavLinks;
 
   return (
     <div className="flex h-screen overflow-hidden bg-[hsl(var(--background))]">
@@ -62,22 +71,35 @@ export default function Layout({ children }) {
 
         {/* Navigation */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {filteredLinks.map(({ to, label, icon: Icon }) => {
-            const active = location.pathname === to || location.pathname.startsWith(to + "/");
+          {navLinks.map(({ to, label, icon: Icon }, index) => {
+            // For admin navigation, handle special routing
+            let isActive = false;
+            
+            if (isAdmin && to.startsWith("/admin")) {
+              // Admin panel navigation - check if we're on admin page
+              isActive = location.pathname === "/admin" && (
+                to === "/admin?tab=analytics" || 
+                location.search.includes(to.split('?')[1]) ||
+                (to === "/admin?tab=analytics" && !location.search)
+              );
+            } else {
+              isActive = location.pathname === to || location.pathname.startsWith(to + "/");
+            }
+            
             return (
               <Link
-                key={to}
+                key={`${to}-${index}`}
                 to={to}
                 onClick={() => setSidebarOpen(false)}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200
-                  ${active
+                  ${isActive
                     ? "bg-blue-600/20 text-blue-400 border border-blue-600/30"
                     : "text-white/60 hover:text-white hover:bg-white/8"
                   }`}
               >
                 <Icon className="w-4 h-4 flex-shrink-0" />
                 {label}
-                {label === "Admin Panel" && (
+                {isAdmin && to.startsWith("/admin") && (
                   <span className="ml-auto text-xs bg-blue-600/30 text-blue-400 px-1.5 py-0.5 rounded-full">
                     Admin
                   </span>

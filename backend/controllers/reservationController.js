@@ -10,121 +10,160 @@ export const reservationValidation = [
   body("checkInDate")
     .notEmpty().withMessage("Check-in date is required")
     .isISO8601().withMessage("Invalid check-in date format")
-    .custom((val) => new Date(val) >= new Date(new Date().setHours(0,0,0,0)))
-    .withMessage("Check-in date cannot be in the past"),
+    .custom((val) => {
+      const checkInDate = new Date(val);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (checkInDate < today) {
+        throw new Error("Check-in date cannot be in the past");
+      }
+      return true;
+    }),
   body("checkOutDate")
     .notEmpty().withMessage("Check-out date is required")
-    .isISO8601().withMessage("Invalid check-out date format"),
+    .isISO8601().withMessage("Invalid check-out date format")
+    .custom((checkOutDate, { req }) => {
+      const checkIn = new Date(req.body.checkInDate);
+      const checkOut = new Date(checkOutDate);
+      
+      if (checkOut <= checkIn) {
+        throw new Error("Check-out date must be after check-in date");
+      }
+      return true;
+    }),
   body("guestCount").optional().isInt({ min: 1 }).withMessage("Guest count must be at least 1"),
   body("specialRequests").optional().isLength({ max: 500 }).withMessage("Special requests max 500 chars"),
 ];
 
 // ─── Create Reservation (User) ────────────────────────────────
 export const createReservation = async (req, res, next) => {
-  // Start a session for transaction
-  const session = await mongoose.startSession();
-  session.startTransaction();
-
   try {
+    console.log('🎯 Reservation request received:', req.body);
+    console.log('👤 User:', req.user?._id);
+    
     const { roomId, checkInDate, checkOutDate, guestCount, specialRequests } = req.body;
 
     // Validate MongoDB ObjectId
     if (!mongoose.Types.ObjectId.isValid(roomId)) {
-      await session.abortTransaction();
-      session.endSession();
+      console.log('❌ Invalid room ID format:', roomId);
       return res.status(400).json({ success: false, message: "Invalid room ID format." });
     }
 
-    // Find room with session lock
-    const room = await Room.findById(roomId).session(session);
-    if (!room) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(404).json({ success: false, message: "Room not found." });
-    }
+    console.log('🏨 Looking for room:', roomId);
     
-    if (room.status === "reserved") {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(409).json({ success: false, message: "Room is not available." });
-    }
+    // Find and lock the room using findOneAndUpdate with atomic operation
+    const room = await Room.findOneAndUpdate(
+      { _id: roomId, status: "available" },
+      { $set: { status: "reserved" } },
+      { returnDocument: 'before' } // Return original document
+    );
 
-    // Check capacity
-    if (guestCount && guestCount > room.capacity) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({
-        success: false,
-        message: `Room capacity is ${room.capacity} guests.`,
+    if (!room) {
+      console.log('❌ Room not available or not found');
+      return res.status(409).json({ 
+        success: false, 
+        message: "Room is not available or does not exist." 
       });
     }
 
-    const checkIn = new Date(checkInDate);
-    const checkOut = new Date(checkOutDate);
+    console.log('✅ Room found and locked:', room.roomNumber);
 
-    if (checkOut <= checkIn) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(400).json({
-        success: false,
-        message: "Check-out date must be after check-in date.",
+    try {
+      // Check capacity
+      if (guestCount && guestCount > room.capacity) {
+        console.log('❌ Guest count exceeds capacity:', guestCount, '>', room.capacity);
+        // Rollback room status
+        await Room.findByIdAndUpdate(roomId, { status: "available" });
+        return res.status(400).json({
+          success: false,
+          message: `Room capacity is ${room.capacity} guests.`,
+        });
+      }
+
+      const checkIn = new Date(checkInDate);
+      const checkOut = new Date(checkOutDate);
+
+      console.log('📅 Dates:', { checkIn, checkOut });
+
+      if (checkOut <= checkIn) {
+        console.log('❌ Invalid date range');
+        // Rollback room status
+        await Room.findByIdAndUpdate(roomId, { status: "available" });
+        return res.status(400).json({
+          success: false,
+          message: "Check-out date must be after check-in date.",
+        });
+      }
+
+      // Calculate total price
+      const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+      const totalPrice = nights * room.price;
+
+      console.log('💰 Pricing:', { nights, roomPrice: room.price, totalPrice });
+
+      // Check for overlapping reservations
+      const conflict = await Reservation.findOne({
+        roomId,
+        status: { $nin: ["cancelled"] },
+        $or: [
+          { checkInDate: { $lt: checkOut }, checkOutDate: { $gt: checkIn } },
+        ],
       });
-    }
 
-    // Calculate total price
-    const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
-    const totalPrice = nights * room.price;
+      if (conflict) {
+        console.log('❌ Date conflict found:', conflict._id);
+        // Rollback room status
+        await Room.findByIdAndUpdate(roomId, { status: "available" });
+        return res.status(409).json({
+          success: false,
+          message: "Room is already booked for the selected dates.",
+        });
+      }
 
-    // Check for overlapping reservations with session lock
-    const conflict = await Reservation.findOne({
-      roomId,
-      status: { $nin: ["cancelled"] },
-      $or: [
-        { checkInDate: { $lt: checkOut }, checkOutDate: { $gt: checkIn } },
-      ],
-    }).session(session);
+      console.log('✅ No conflicts found, creating reservation...');
 
-    if (conflict) {
-      await session.abortTransaction();
-      session.endSession();
-      return res.status(409).json({
-        success: false,
-        message: "Room is already booked for the selected dates.",
+      // Create reservation
+      const reservation = await Reservation.create({
+        userId: req.user._id,
+        roomId,
+        checkInDate: checkIn,
+        checkOutDate: checkOut,
+        totalPrice,
+        guestCount: guestCount || 1,
+        specialRequests: specialRequests || "",
       });
+
+      console.log('✅ Reservation created:', reservation._id);
+
+      // Populate room details
+      await reservation.populate("roomId", "roomNumber roomType price");
+
+      res.status(201).json({
+        success: true,
+        message: "Reservation created successfully.",
+        data: reservation,
+      });
+    } catch (innerError) {
+      console.error('❌ Inner error during reservation:', innerError);
+      // Rollback room status on any error
+      try {
+        await Room.findByIdAndUpdate(roomId, { status: "available" });
+      } catch (rollbackError) {
+        console.error("Failed to rollback room status:", rollbackError);
+      }
+      throw innerError;
     }
-
-    // Create reservation within transaction
-    const [reservation] = await Reservation.create([{
-      userId: req.user._id,
-      roomId,
-      checkInDate: checkIn,
-      checkOutDate: checkOut,
-      totalPrice,
-      guestCount: guestCount || 1,
-      specialRequests: specialRequests || "",
-    }], { session });
-
-    // Mark room as reserved within transaction
-    room.status = "reserved";
-    await room.save({ session });
-
-    // Commit transaction
-    await session.commitTransaction();
-    session.endSession();
-
-    // Populate room details after transaction
-    await reservation.populate("roomId", "roomNumber roomType price");
-
-    res.status(201).json({
-      success: true,
-      message: "Reservation created successfully.",
-      data: reservation,
-    });
   } catch (error) {
-    // Rollback transaction on error
-    await session.abortTransaction();
-    session.endSession();
-    next(error);
+    console.error("❌ Reservation creation error:", error);
+    if (next && typeof next === 'function') {
+      next(error);
+    } else {
+      res.status(500).json({
+        success: false,
+        message: "Internal server error. Please try again.",
+      });
+    }
   }
 };
 
