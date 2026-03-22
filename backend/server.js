@@ -178,11 +178,16 @@ if (process.env.NODE_ENV === 'production') {
   const clientPath = path.join(__dirname, '../client/dist');
   console.log('Serving static files from:', clientPath);
   
-  app.use(express.static(clientPath));
-  
-  // Catch-all route for SPA - only for non-API routes
+  // Serve static files ONLY for non-API routes
   app.use((req, res, next) => {
-    // Don't catch API routes
+    if (req.url.startsWith('/api/')) {
+      return next();
+    }
+    express.static(clientPath)(req, res, next);
+  });
+  
+  // Catch-all route for SPA
+  app.use((req, res, next) => {
     if (req.url.startsWith('/api/')) {
       return next();
     }
