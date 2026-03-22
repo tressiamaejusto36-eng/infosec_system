@@ -31,6 +31,9 @@ export default function Login() {
       const response = await api.post("/auth/login", data);
       console.log('Login response:', response.data);
       
+      // Show alert with response for debugging
+      alert('Response: ' + JSON.stringify(response.data, null, 2));
+      
       if (response.data.success) {
         toast.success("OTP sent to your email!");
         navigate("/verify-otp", { state: { email: data.email } });
@@ -40,6 +43,7 @@ export default function Login() {
     } catch (err) {
       console.error('Login error:', err);
       console.error('Error response:', err.response?.data);
+      alert('Error: ' + JSON.stringify(err.response?.data || err.message, null, 2));
       const msg = err.response?.data?.message || "Login failed. Please try again.";
       setError(msg);
     } finally {
