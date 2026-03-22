@@ -172,7 +172,7 @@ app.use(errorHandler);
 // ─── Start Server ─────────────────────────────────────────────
 try {
   await connectDB();
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ SecureStay server running on port ${PORT}`);
   });
 } catch (error) {
