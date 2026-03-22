@@ -24,8 +24,9 @@ export default function RoomCard({ room }) {
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
       return imageUrl;
     }
-    // Otherwise, it's a local path, prepend the API URL
-    return `http://localhost:5000${imageUrl}`;
+    // Otherwise, it's a local path, prepend the API base URL
+    const apiBase = import.meta.env.VITE_API_URL?.replace('/api', '') || window.location.origin;
+    return `${apiBase}${imageUrl}`;
   };
 
   return (

@@ -31,6 +31,7 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "https://www.google.com", "https://www.gstatic.com"],
+      scriptSrcElem: ["'self'", "'unsafe-inline'", "https://www.google.com", "https://www.gstatic.com"],
       frameSrc: ["'self'", "https://www.google.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],

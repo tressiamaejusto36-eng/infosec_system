@@ -1031,7 +1031,8 @@ export default function AdminPanel() {
                       if (url.startsWith('http://') || url.startsWith('https://')) {
                         return url;
                       }
-                      return `http://localhost:5000${url}`;
+                      const apiBase = import.meta.env.VITE_API_URL?.replace('/api', '') || window.location.origin;
+                      return `${apiBase}${url}`;
                     };
                     
                     return (
