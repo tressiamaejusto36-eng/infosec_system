@@ -35,7 +35,7 @@ app.use(helmet({
       frameSrc: ["'self'", "https://www.google.com"],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'"],
+      connectSrc: ["'self'", "https://securestay.onrender.com"],
     },
   },
 }));
@@ -153,6 +153,25 @@ app.get("/api/debug/files", async (req, res) => {
       path: clientPath,
       error: error.message,
       nodeEnv: process.env.NODE_ENV 
+    });
+  }
+});
+
+// ─── Debug endpoint to check user exists ─────────────────────
+app.get("/api/debug/user/:email", async (req, res) => {
+  try {
+    const User = (await import('./models/User.js')).default;
+    const user = await User.findOne({ email: req.params.email });
+    res.json({ 
+      success: true, 
+      exists: !!user,
+      email: req.params.email,
+      hasBrevoKey: !!process.env.BREVO_API_KEY
+    });
+  } catch (error) {
+    res.json({ 
+      success: false, 
+      error: error.message 
     });
   }
 });

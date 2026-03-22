@@ -27,7 +27,9 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
+      console.log('Attempting login with:', { email: data.email });
       const response = await api.post("/auth/login", data);
+      console.log('Login response:', response.data);
       
       if (response.data.success) {
         toast.success("OTP sent to your email!");
@@ -36,6 +38,8 @@ export default function Login() {
         setError(response.data.message || "Login failed");
       }
     } catch (err) {
+      console.error('Login error:', err);
+      console.error('Error response:', err.response?.data);
       const msg = err.response?.data?.message || "Login failed. Please try again.";
       setError(msg);
     } finally {
