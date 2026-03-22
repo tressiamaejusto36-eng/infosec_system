@@ -152,8 +152,8 @@ if (process.env.NODE_ENV === 'production') {
   
   app.use(express.static(clientPath));
   
-  // Catch-all route must be after API routes
-  app.get('*', (req, res) => {
+  // Catch-all route must be after API routes (Express 5 syntax)
+  app.get('/*', (req, res) => {
     console.log('Serving index.html for:', req.url);
     res.sendFile(path.join(clientPath, 'index.html'));
   });
