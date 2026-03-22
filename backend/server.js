@@ -186,8 +186,8 @@ if (process.env.NODE_ENV === 'production') {
     express.static(clientPath)(req, res, next);
   });
   
-  // Catch-all for SPA
-  app.get('*', (req, res, next) => {
+  // Catch-all for SPA - use middleware instead of app.get('*')
+  app.use((req, res, next) => {
     if (req.path.startsWith('/api')) {
       return next();
     }
