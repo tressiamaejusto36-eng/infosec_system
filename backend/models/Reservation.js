@@ -22,8 +22,20 @@ const reservationSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "confirmed", "cancelled", "completed"],
+      enum: ["pending", "confirmed", "cancelled", "completed", "checked-in", "checked-out"],
       default: "confirmed",
+    },
+    checkInTime: {
+      type: Date,
+    },
+    checkOutTime: {
+      type: Date,
+    },
+    actualCheckInDate: {
+      type: Date,
+    },
+    actualCheckOutDate: {
+      type: Date,
     },
     totalPrice: {
       type: Number,

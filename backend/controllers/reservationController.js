@@ -292,3 +292,178 @@ export const getAllReservations = async (req, res, next) => {
     next(error);
   }
 };
+
+// ─── Check-in Guest (Admin) ───────────────────────────────────
+export const checkInGuest = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid reservation ID",
+      });
+    }
+
+    const reservation = await Reservation.findById(id)
+      .populate("userId", "name email")
+      .populate("roomId", "roomNumber roomType");
+
+    if (!reservation) {
+      return res.status(404).json({
+        success: false,
+        message: "Reservation not found",
+      });
+    }
+
+    if (reservation.status === "checked-in") {
+      return res.status(400).json({
+        success: false,
+        message: "Guest is already checked in",
+      });
+    }
+
+    if (reservation.status === "cancelled") {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot check in a cancelled reservation",
+      });
+    }
+
+    // Update reservation
+    reservation.status = "checked-in";
+    reservation.checkInTime = new Date();
+    reservation.actualCheckInDate = new Date();
+    await reservation.save();
+
+    // Update room status
+    await Room.findByIdAndUpdate(reservation.roomId, {
+      status: "reserved",
+      housekeepingStatus: "dirty",
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Guest checked in successfully",
+      data: reservation,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── Check-out Guest (Admin) ──────────────────────────────────
+export const checkOutGuest = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid reservation ID",
+      });
+    }
+
+    const reservation = await Reservation.findById(id)
+      .populate("userId", "name email")
+      .populate("roomId", "roomNumber roomType");
+
+    if (!reservation) {
+      return res.status(404).json({
+        success: false,
+        message: "Reservation not found",
+      });
+    }
+
+    if (reservation.status === "checked-out") {
+      return res.status(400).json({
+        success: false,
+        message: "Guest is already checked out",
+      });
+    }
+
+    if (reservation.status !== "checked-in") {
+      return res.status(400).json({
+        success: false,
+        message: "Guest must be checked in before checking out",
+      });
+    }
+
+    // Update reservation
+    reservation.status = "checked-out";
+    reservation.checkOutTime = new Date();
+    reservation.actualCheckOutDate = new Date();
+    await reservation.save();
+
+    // Update room status and create housekeeping task
+    await Room.findByIdAndUpdate(reservation.roomId, {
+      status: "cleaning",
+      housekeepingStatus: "dirty",
+    });
+
+    // Auto-create housekeeping task
+    const Housekeeping = (await import("../models/Housekeeping.js")).default;
+    await Housekeeping.create({
+      roomId: reservation.roomId,
+      taskType: "checkout-cleaning",
+      priority: "high",
+      notes: `Checkout cleaning for reservation ${reservation._id}`,
+    });
+
+    res.status(200).json({
+      success: true,
+      message: "Guest checked out successfully",
+      data: reservation,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ─── Get Check-in/Check-out Dashboard (Admin) ─────────────────
+export const getCheckInOutDashboard = async (req, res, next) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const [checkingInToday, checkingOutToday, currentGuests] = await Promise.all([
+      Reservation.find({
+        checkInDate: { $gte: today, $lt: tomorrow },
+        status: { $in: ["confirmed", "pending"] },
+      })
+        .populate("userId", "name email phone")
+        .populate("roomId", "roomNumber roomType"),
+
+      Reservation.find({
+        checkOutDate: { $gte: today, $lt: tomorrow },
+        status: "checked-in",
+      })
+        .populate("userId", "name email phone")
+        .populate("roomId", "roomNumber roomType"),
+
+      Reservation.find({
+        status: "checked-in",
+      })
+        .populate("userId", "name email phone")
+        .populate("roomId", "roomNumber roomType"),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        checkingInToday,
+        checkingOutToday,
+        currentGuests,
+        stats: {
+          checkInsToday: checkingInToday.length,
+          checkOutsToday: checkingOutToday.length,
+          currentOccupancy: currentGuests.length,
+        },
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

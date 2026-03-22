@@ -7,6 +7,7 @@ import {
   deleteRoom,
   uploadRoomImages,
   deleteRoomImage,
+  advancedRoomSearch,
   roomValidation,
 } from "../controllers/roomController.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
@@ -18,6 +19,7 @@ const router = Router();
 
 // Public routes
 router.get("/", getRooms);
+router.get("/search", advancedRoomSearch);
 router.get("/:id", getRoomById);
 
 // Admin-only routes

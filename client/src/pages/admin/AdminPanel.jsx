@@ -20,7 +20,7 @@ import toast from "react-hot-toast";
 const ROOM_TYPES = ["Standard", "Deluxe", "Suite", "Presidential"];
 const INVENTORY_CATEGORIES = ["Furniture", "Electronics", "Linens", "Bathroom", "Kitchen", "Cleaning", "Maintenance", "Amenities", "Safety", "Other"];
 const defaultRoomForm = { roomNumber: "", roomType: "Standard", price: "", capacity: 1, description: "", status: "available" };
-const defaultInventoryForm = { roomId: "", itemName: "", category: "Furniture", quantity: 0, minQuantity: 1, maxQuantity: 10, unitPrice: 0, condition: "Good", location: "", notes: "" };
+const defaultInventoryForm = { roomId: "", itemName: "", category: "Furniture", quantity: "", minQuantity: "", maxQuantity: "", unitPrice: "", condition: "Good", location: "", notes: "" };
 
 const statusVariantMap = {
   confirmed: "success", cancelled: "destructive", pending: "warning", completed: "default"
@@ -321,14 +321,35 @@ export default function AdminPanel() {
     }
   };
 
-  const openCreateInventory = () => {
+  const openCreateInventory = async () => {
     setEditingInventory(null);
-    setInventoryForm({ ...defaultInventoryForm, roomId: rooms[0]?._id || "" });
+    // Fetch rooms if not already loaded
+    if (rooms.length === 0) {
+      try {
+        const res = await api.get("/rooms?limit=100");
+        setRooms(res.data.data);
+        setInventoryForm({ ...defaultInventoryForm, roomId: res.data.data[0]?._id || "" });
+      } catch (e) {
+        console.error(e);
+        setInventoryForm(defaultInventoryForm);
+      }
+    } else {
+      setInventoryForm({ ...defaultInventoryForm, roomId: rooms[0]?._id || "" });
+    }
     setInventoryDialog(true);
   };
 
-  const openEditInventory = (item) => {
+  const openEditInventory = async (item) => {
     setEditingInventory(item);
+    // Fetch rooms if not already loaded
+    if (rooms.length === 0) {
+      try {
+        const res = await api.get("/rooms?limit=100");
+        setRooms(res.data.data);
+      } catch (e) {
+        console.error(e);
+      }
+    }
     setInventoryForm({
       roomId: item.roomId._id,
       itemName: item.itemName,
@@ -351,11 +372,20 @@ export default function AdminPanel() {
     }
     setSaving(true);
     try {
+      // Convert string values to numbers
+      const payload = {
+        ...inventoryForm,
+        quantity: Number(inventoryForm.quantity) || 0,
+        minQuantity: Number(inventoryForm.minQuantity) || 1,
+        maxQuantity: Number(inventoryForm.maxQuantity) || 10,
+        unitPrice: Number(inventoryForm.unitPrice) || 0
+      };
+      
       if (editingInventory) {
-        await api.put(`/inventory/${editingInventory._id}`, inventoryForm);
+        await api.put(`/inventory/${editingInventory._id}`, payload);
         toast.success("Inventory item updated!");
       } else {
-        await api.post("/inventory", inventoryForm);
+        await api.post("/inventory", payload);
         toast.success("Inventory item created!");
       }
       setInventoryDialog(false);
@@ -994,15 +1024,25 @@ export default function AdminPanel() {
               <div className="space-y-3">
                 <label className="text-xs text-white/60">Current Images</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {editingRoom.images.map((imageUrl, index) => (
-                    <div key={index} className="relative group">
-                      <img 
-                        src={`http://localhost:5000${imageUrl}`} 
-                        alt={`Room ${index + 1}`}
-                        className="w-full h-20 object-cover rounded-lg"
-                      />
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
-                        <Button
+                  {editingRoom.images.map((imageUrl, index) => {
+                    // Handle both local uploads and external URLs
+                    const getImageUrl = (url) => {
+                      if (!url) return null;
+                      if (url.startsWith('http://') || url.startsWith('https://')) {
+                        return url;
+                      }
+                      return `http://localhost:5000${url}`;
+                    };
+                    
+                    return (
+                      <div key={index} className="relative group">
+                        <img 
+                          src={getImageUrl(imageUrl)} 
+                          alt={`Room ${index + 1}`}
+                          className="w-full h-20 object-cover rounded-lg"
+                        />
+                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center">
+                          <Button
                           size="sm"
                           variant="destructive"
                           onClick={async () => {
@@ -1026,7 +1066,8 @@ export default function AdminPanel() {
                         </Button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1158,7 +1199,8 @@ export default function AdminPanel() {
                   type="number" 
                   min="0"
                   value={inventoryForm.quantity} 
-                  onChange={(e) => setInventoryForm({ ...inventoryForm, quantity: Number(e.target.value) })} 
+                  onChange={(e) => setInventoryForm({ ...inventoryForm, quantity: e.target.value })} 
+                  placeholder="0"
                 />
               </div>
               <div className="space-y-1">
@@ -1167,7 +1209,8 @@ export default function AdminPanel() {
                   type="number" 
                   min="0"
                   value={inventoryForm.minQuantity} 
-                  onChange={(e) => setInventoryForm({ ...inventoryForm, minQuantity: Number(e.target.value) })} 
+                  onChange={(e) => setInventoryForm({ ...inventoryForm, minQuantity: e.target.value })} 
+                  placeholder="1"
                 />
               </div>
               <div className="space-y-1">
@@ -1176,7 +1219,8 @@ export default function AdminPanel() {
                   type="number" 
                   min="1"
                   value={inventoryForm.maxQuantity} 
-                  onChange={(e) => setInventoryForm({ ...inventoryForm, maxQuantity: Number(e.target.value) })} 
+                  onChange={(e) => setInventoryForm({ ...inventoryForm, maxQuantity: e.target.value })} 
+                  placeholder="10"
                 />
               </div>
               <div className="space-y-1">
@@ -1186,7 +1230,8 @@ export default function AdminPanel() {
                   min="0"
                   step="0.01"
                   value={inventoryForm.unitPrice} 
-                  onChange={(e) => setInventoryForm({ ...inventoryForm, unitPrice: Number(e.target.value) })} 
+                  onChange={(e) => setInventoryForm({ ...inventoryForm, unitPrice: e.target.value })} 
+                  placeholder="0.00"
                 />
               </div>
             </div>

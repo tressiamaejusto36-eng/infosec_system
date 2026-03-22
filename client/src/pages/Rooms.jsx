@@ -2,28 +2,29 @@ import { useState, useEffect } from "react";
 import RoomCard from "../components/RoomCard";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
-import { BedDouble, Search, SlidersHorizontal, X } from "lucide-react";
+import { BedDouble, Search, X } from "lucide-react";
 import api from "../lib/api";
 
-const ROOM_TYPES = ["All", "Standard", "Deluxe", "Suite", "Presidential"];
+const ROOM_TYPES = ["Standard", "Deluxe", "Suite", "Presidential"];
 
 export default function Rooms() {
   const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [selectedType, setSelectedType] = useState("All");
+  const [selectedTypes, setSelectedTypes] = useState([]);
   const [statusFilter, setStatusFilter] = useState("all");
-  const [maxPrice, setMaxPrice] = useState("");
   const [total, setTotal] = useState(0);
 
   const fetchRooms = async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
-      if (selectedType !== "All") params.set("type", selectedType);
+      
+      // Basic filters
       if (statusFilter !== "all") params.set("status", statusFilter);
-      if (maxPrice) params.set("maxPrice", maxPrice);
+      if (selectedTypes.length > 0) params.set("roomType", selectedTypes.join(","));
       params.set("limit", "50");
+      
       const res = await api.get(`/rooms?${params.toString()}`);
       setRooms(res.data.data);
       setTotal(res.data.pagination?.total || res.data.data.length);
@@ -34,7 +35,7 @@ export default function Rooms() {
     }
   };
 
-  useEffect(() => { fetchRooms(); }, [selectedType, statusFilter, maxPrice]);
+  useEffect(() => { fetchRooms(); }, [selectedTypes, statusFilter]);
 
   const filtered = rooms.filter(r =>
     search === "" ||
@@ -43,14 +44,19 @@ export default function Rooms() {
     r.description?.toLowerCase().includes(search.toLowerCase())
   );
 
+  const toggleRoomType = (type) => {
+    setSelectedTypes(prev =>
+      prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]
+    );
+  };
+
   const clearFilters = () => {
-    setSelectedType("All");
+    setSelectedTypes([]);
     setStatusFilter("all");
-    setMaxPrice("");
     setSearch("");
   };
 
-  const hasFilters = selectedType !== "All" || statusFilter !== "all" || maxPrice !== "" || search !== "";
+  const hasFilters = selectedTypes.length > 0 || statusFilter !== "all" || search !== "";
 
   return (
     <div className="space-y-6 animate-in fade-in duration-300">
@@ -72,10 +78,7 @@ export default function Rooms() {
 
       {/* Filters */}
       <div className="glass rounded-xl p-4 space-y-4">
-        <div className="flex items-center gap-3">
-          <SlidersHorizontal className="w-4 h-4 text-white/40" />
-          <span className="text-white/60 text-sm font-medium">Filters</span>
-        </div>
+        {/* Basic Filters */}
         <div className="flex flex-wrap gap-3">
           {/* Search */}
           <div className="relative flex-1 min-w-48">
@@ -97,23 +100,16 @@ export default function Rooms() {
             <option value="available" className="bg-gray-900">Available</option>
             <option value="reserved" className="bg-gray-900">Reserved</option>
           </select>
-          {/* Max price */}
-          <Input
-            type="number"
-            placeholder="Max price/night"
-            value={maxPrice}
-            onChange={(e) => setMaxPrice(e.target.value)}
-            className="w-36"
-          />
         </div>
+        
         {/* Room type pills */}
         <div className="flex flex-wrap gap-2">
           {ROOM_TYPES.map(type => (
             <button
               key={type}
-              onClick={() => setSelectedType(type)}
+              onClick={() => toggleRoomType(type)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-200 border
-                ${selectedType === type
+                ${selectedTypes.includes(type)
                   ? "bg-blue-600/30 text-blue-400 border-blue-600/50"
                   : "border-white/10 text-white/50 hover:text-white hover:border-white/20"
                 }`}

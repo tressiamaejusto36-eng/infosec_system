@@ -51,9 +51,7 @@ const inventorySchema = new mongoose.Schema(
     },
     totalValue: {
       type: Number,
-      default: function() {
-        return this.quantity * this.unitPrice;
-      }
+      default: 0
     },
     supplier: {
       name: {
@@ -75,11 +73,7 @@ const inventorySchema = new mongoose.Schema(
     status: {
       type: String,
       enum: ["In Stock", "Low Stock", "Out of Stock", "On Order", "Discontinued"],
-      default: function() {
-        if (this.quantity === 0) return "Out of Stock";
-        if (this.quantity <= this.minQuantity) return "Low Stock";
-        return "In Stock";
-      }
+      default: "In Stock"
     },
     condition: {
       type: String,
@@ -140,7 +134,7 @@ inventorySchema.virtual('daysSinceRestock').get(function() {
 });
 
 // Pre-save middleware to update status and total value
-inventorySchema.pre("save", function(next) {
+inventorySchema.pre("save", function() {
   // Update total value
   this.totalValue = this.quantity * this.unitPrice;
   
@@ -152,8 +146,6 @@ inventorySchema.pre("save", function(next) {
   } else if (this.status === "Out of Stock" || this.status === "Low Stock") {
     this.status = "In Stock";
   }
-  
-  next();
 });
 
 // Indexes for better query performance

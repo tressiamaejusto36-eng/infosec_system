@@ -4,6 +4,9 @@ import {
   getUserReservations,
   cancelReservation,
   getAllReservations,
+  checkInGuest,
+  checkOutGuest,
+  getCheckInOutDashboard,
   reservationValidation,
 } from "../controllers/reservationController.js";
 import authMiddleware from "../middlewares/authMiddleware.js";
@@ -25,5 +28,8 @@ router.patch("/:id/cancel", cancelReservation);
 
 // Admin routes
 router.get("/", adminMiddleware, getAllReservations);
+router.get("/dashboard", adminMiddleware, getCheckInOutDashboard);
+router.patch("/:id/check-in", adminMiddleware, checkInGuest);
+router.patch("/:id/check-out", adminMiddleware, checkOutGuest);
 
 export default router;

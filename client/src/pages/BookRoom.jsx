@@ -116,6 +116,17 @@ export default function BookRoom() {
   const canBook = room.status === "available" && checkIn && checkOut && nights > 0;
   const hasImages = room.images && room.images.length > 0;
 
+  // Handle both local uploads and external URLs
+  const getImageUrl = (imageUrl) => {
+    if (!imageUrl) return null;
+    // If it's already a full URL (starts with http:// or https://), use it as is
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
+    }
+    // Otherwise, it's a local path, prepend the API URL
+    return `http://localhost:5000${imageUrl}`;
+  };
+
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-300">
       <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-white/50 hover:text-white transition-colors text-sm">
@@ -130,7 +141,7 @@ export default function BookRoom() {
             {hasImages ? (
               <>
                 <img 
-                  src={`http://localhost:5000${room.images[currentImageIndex]}`} 
+                  src={getImageUrl(room.images[currentImageIndex])} 
                   alt={`${room.roomType} Room ${room.roomNumber} - Image ${currentImageIndex + 1}`}
                   className="w-full h-full object-cover"
                   onError={(e) => {

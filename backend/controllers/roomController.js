@@ -145,6 +145,10 @@ export const getRoomById = async (req, res, next) => {
 // ─── Create Room (Admin) ───────────────────────────────────────
 export const createRoom = async (req, res, next) => {
   try {
+    // Set basePrice to price if not provided
+    if (!req.body.basePrice && req.body.price) {
+      req.body.basePrice = req.body.price;
+    }
     const room = await Room.create(req.body);
     res.status(201).json({
       success: true,
@@ -165,6 +169,11 @@ export const updateRoom = async (req, res, next) => {
         success: false,
         message: "Invalid room ID format.",
       });
+    }
+
+    // Set basePrice to price if not provided and price is being updated
+    if (!req.body.basePrice && req.body.price) {
+      req.body.basePrice = req.body.price;
     }
 
     const room = await Room.findByIdAndUpdate(
@@ -335,6 +344,136 @@ export const deleteRoomImage = async (req, res, next) => {
       success: true,
       message: "Image deleted successfully.",
       data: { images: room.images }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+// ─── Advanced Room Search (Public) ─────────────────────────────
+export const advancedRoomSearch = async (req, res, next) => {
+  try {
+    const {
+      roomType,
+      minPrice,
+      maxPrice,
+      minCapacity,
+      maxCapacity,
+      amenities,
+      checkInDate,
+      checkOutDate,
+      housekeepingStatus,
+      page = 1,
+      limit = 12,
+      sortBy = "price",
+      sortOrder = "asc",
+    } = req.query;
+
+    const filter = {};
+
+    // Room type filter
+    const validRoomTypes = ["Standard", "Deluxe", "Suite", "Presidential"];
+    if (roomType) {
+      const types = roomType.split(",").filter(t => validRoomTypes.includes(t));
+      if (types.length > 0) {
+        filter.roomType = { $in: types };
+      }
+    }
+
+    // Price range filter
+    if (minPrice || maxPrice) {
+      filter.price = {};
+      if (minPrice) {
+        const min = parseFloat(minPrice);
+        if (!isNaN(min) && min >= 0) filter.price.$gte = min;
+      }
+      if (maxPrice) {
+        const max = parseFloat(maxPrice);
+        if (!isNaN(max) && max >= 0) filter.price.$lte = max;
+      }
+    }
+
+    // Capacity filter
+    if (minCapacity || maxCapacity) {
+      filter.capacity = {};
+      if (minCapacity) {
+        const min = parseInt(minCapacity);
+        if (!isNaN(min) && min > 0) filter.capacity.$gte = min;
+      }
+      if (maxCapacity) {
+        const max = parseInt(maxCapacity);
+        if (!isNaN(max) && max > 0) filter.capacity.$lte = max;
+      }
+    }
+
+    // Amenities filter
+    if (amenities) {
+      const amenityList = amenities.split(",").map(a => a.trim());
+      filter.amenities = { $all: amenityList };
+    }
+
+    // Housekeeping status filter (admin only)
+    if (housekeepingStatus && req.user?.role === "admin") {
+      const validStatuses = ["clean", "dirty", "in-progress", "inspected"];
+      if (validStatuses.includes(housekeepingStatus)) {
+        filter.housekeepingStatus = housekeepingStatus;
+      }
+    }
+
+    // Date availability filter
+    if (checkInDate && checkOutDate) {
+      const checkIn = new Date(checkInDate);
+      const checkOut = new Date(checkOutDate);
+
+      if (!isNaN(checkIn.getTime()) && !isNaN(checkOut.getTime()) && checkOut > checkIn) {
+        // Find rooms that don't have conflicting reservations
+        const Reservation = (await import("../models/Reservation.js")).default;
+        const conflictingReservations = await Reservation.find({
+          status: { $nin: ["cancelled", "checked-out"] },
+          $or: [
+            { checkInDate: { $lt: checkOut }, checkOutDate: { $gt: checkIn } },
+          ],
+        }).distinct("roomId");
+
+        filter._id = { $nin: conflictingReservations };
+      }
+    }
+
+    // Pagination
+    const pageNum = Math.max(1, parseInt(page) || 1);
+    const limitNum = Math.min(100, Math.max(1, parseInt(limit) || 12));
+    const skip = (pageNum - 1) * limitNum;
+
+    // Sorting
+    const validSortFields = ["price", "capacity", "roomNumber", "roomType", "createdAt"];
+    const sortField = validSortFields.includes(sortBy) ? sortBy : "price";
+    const sortDirection = sortOrder === "desc" ? -1 : 1;
+
+    const [rooms, total] = await Promise.all([
+      Room.find(filter)
+        .sort({ [sortField]: sortDirection })
+        .skip(skip)
+        .limit(limitNum),
+      Room.countDocuments(filter),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: rooms,
+      pagination: {
+        total,
+        page: pageNum,
+        pages: Math.ceil(total / limitNum),
+        limit: limitNum,
+      },
+      filters: {
+        roomType,
+        priceRange: { min: minPrice, max: maxPrice },
+        capacityRange: { min: minCapacity, max: maxCapacity },
+        amenities: amenities?.split(","),
+        dateRange: { checkIn: checkInDate, checkOut: checkOutDate },
+      },
     });
   } catch (error) {
     next(error);

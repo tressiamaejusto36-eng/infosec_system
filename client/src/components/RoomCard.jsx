@@ -16,6 +16,17 @@ export default function RoomCard({ room }) {
   const isAvailable = room.status === "available";
   const hasImages = room.images && room.images.length > 0;
   const primaryImage = hasImages ? room.images[0] : null;
+  
+  // Handle both local uploads and external URLs
+  const getImageUrl = (imageUrl) => {
+    if (!imageUrl) return null;
+    // If it's already a full URL (starts with http:// or https://), use it as is
+    if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
+      return imageUrl;
+    }
+    // Otherwise, it's a local path, prepend the API URL
+    return `http://localhost:5000${imageUrl}`;
+  };
 
   return (
     <Card className="group overflow-hidden hover:border-white/20 transition-all duration-300 hover:-translate-y-1 hover:shadow-2xl">
@@ -24,7 +35,7 @@ export default function RoomCard({ room }) {
         {hasImages ? (
           <>
             <img 
-              src={`http://localhost:5000${primaryImage}`} 
+              src={getImageUrl(primaryImage)} 
               alt={`${room.roomType} Room ${room.roomNumber}`}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               onError={(e) => {

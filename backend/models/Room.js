@@ -19,6 +19,11 @@ const roomSchema = new mongoose.Schema(
       required: [true, "Price per night is required"],
       min: [0, "Price cannot be negative"],
     },
+    basePrice: {
+      type: Number,
+      required: false,
+      min: [0, "Base price cannot be negative"],
+    },
     capacity: {
       type: Number,
       required: [true, "Capacity is required"],
@@ -26,8 +31,21 @@ const roomSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["available", "reserved"],
+      enum: ["available", "reserved", "maintenance", "cleaning"],
       default: "available",
+    },
+    housekeepingStatus: {
+      type: String,
+      enum: ["clean", "dirty", "in-progress", "inspected"],
+      default: "clean",
+    },
+    lastCleaned: {
+      type: Date,
+      default: Date.now,
+    },
+    assignedHousekeeper: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
     },
     description: {
       type: String,
