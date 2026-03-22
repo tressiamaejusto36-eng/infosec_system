@@ -101,11 +101,16 @@ export const register = async (req, res, next) => {
 // ─── Login ────────────────────────────────────────────────────
 export const login = async (req, res, next) => {
   try {
+    console.log('🔐 Login attempt:', { email: req.body.email, hasPassword: !!req.body.password });
+    
     const { email, password } = req.body;
 
     // Fetch user with password and OTP fields
     const user = await User.findOne({ email }).select("+password +otpHash");
+    console.log('👤 User found:', !!user);
+    
     if (!user) {
+      console.log('❌ User not found for email:', email);
       return res.status(401).json({
         success: false,
         message: "Invalid email or password.",
@@ -116,6 +121,7 @@ export const login = async (req, res, next) => {
     if (user.isLocked()) {
       const remainingMs = user.lockUntil - Date.now();
       const remainingMin = Math.ceil(remainingMs / 60000);
+      console.log('🔒 Account locked for:', email);
       return res.status(423).json({
         success: false,
         message: `Account locked. Try again in ${remainingMin} minute(s).`,
@@ -124,10 +130,13 @@ export const login = async (req, res, next) => {
 
     // Verify password
     const isMatch = await user.comparePassword(password);
+    console.log('🔑 Password match:', isMatch);
+    
     if (!isMatch) {
       await user.incrementFailedAttempts();
       const maxAttempts = parseInt(process.env.MAX_LOGIN_ATTEMPTS) || 5;
       const attemptsLeft = maxAttempts - user.failedLoginAttempts;
+      console.log('❌ Invalid password, attempts left:', attemptsLeft);
       return res.status(401).json({
         success: false,
         message:
@@ -151,8 +160,19 @@ export const login = async (req, res, next) => {
     user.otpAttempts = 0;
     await user.save();
 
+    console.log('📧 Attempting to send OTP to:', email);
+    
     // Send OTP email
-    await sendOTPEmail(user.email, user.name, otp);
+    try {
+      await sendOTPEmail(user.email, user.name, otp);
+      console.log('✅ OTP sent successfully to:', email);
+    } catch (emailError) {
+      console.error('❌ Failed to send OTP email:', emailError.message);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send OTP email. Please try again.",
+      });
+    }
 
     res.status(200).json({
       success: true,
