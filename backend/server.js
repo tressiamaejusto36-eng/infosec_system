@@ -26,19 +26,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ─── Security Middleware ─────────────────────────────────────
+// Temporarily disable CSP for debugging
 app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://www.google.com", "https://www.gstatic.com"],
-      scriptSrcElem: ["'self'", "'unsafe-inline'", "https://www.google.com", "https://www.gstatic.com"],
-      frameSrc: ["'self'", "https://www.google.com"],
-      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-      fontSrc: ["'self'", "https://fonts.gstatic.com"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "https://securestay.onrender.com"],
-    },
-  },
+  contentSecurityPolicy: false,
 }));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
