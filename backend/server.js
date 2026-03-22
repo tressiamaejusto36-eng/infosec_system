@@ -44,7 +44,7 @@ app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(cookieParser());
 
 // ─── Static Files ────────────────────────────────────────────
-// Serve uploaded images
+// Serve uploaded images ONLY - not the frontend yet
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ─── Data Sanitization ───────────────────────────────────────
@@ -178,20 +178,20 @@ if (process.env.NODE_ENV === 'production') {
   const clientPath = path.join(__dirname, '../client/dist');
   console.log('Serving static files from:', clientPath);
   
-  // Serve static files ONLY for non-API routes
+  // Serve static files for non-API routes
   app.use((req, res, next) => {
-    if (req.url.startsWith('/api/')) {
+    if (req.path.startsWith('/api')) {
       return next();
     }
     express.static(clientPath)(req, res, next);
   });
   
-  // Catch-all route for SPA
-  app.use((req, res, next) => {
-    if (req.url.startsWith('/api/')) {
+  // Catch-all for SPA
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api')) {
       return next();
     }
-    console.log('Serving index.html for:', req.url);
+    console.log('Serving index.html for:', req.path);
     res.sendFile(path.join(clientPath, 'index.html'));
   });
 }
