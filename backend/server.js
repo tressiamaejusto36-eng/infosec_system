@@ -29,7 +29,7 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet());
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL || true 
+    ? 'https://securestay.onrender.com'
     : "http://localhost:5173",
   credentials: true,
 }));
