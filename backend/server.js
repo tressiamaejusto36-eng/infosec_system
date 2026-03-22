@@ -31,7 +31,6 @@ app.use(cors({
   origin: process.env.NODE_ENV === 'production' ? 'https://securestay.onrender.com' : "http://localhost:5173",
   credentials: true,
 }));
-app.use(globalLimiter);
 
 // ─── Body Parsing ────────────────────────────────────────────
 app.use(express.json({ limit: "10kb" }));
