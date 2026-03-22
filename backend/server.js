@@ -25,15 +25,10 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ─── Security Middleware ─────────────────────────────────────
-// Temporarily disable CSP for debugging
-app.use(helmet({
-  contentSecurityPolicy: false,
-}));
+// ─── Security & CORS ─────────────────────────────────────────
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? 'https://securestay.onrender.com'
-    : "http://localhost:5173",
+  origin: process.env.NODE_ENV === 'production' ? 'https://securestay.onrender.com' : "http://localhost:5173",
   credentials: true,
 }));
 app.use(globalLimiter);
@@ -43,175 +38,34 @@ app.use(express.json({ limit: "10kb" }));
 app.use(express.urlencoded({ extended: true, limit: "10kb" }));
 app.use(cookieParser());
 
-// ─── Static Files ────────────────────────────────────────────
-// Serve uploaded images ONLY - not the frontend yet
+// ─── Uploads ─────────────────────────────────────────────────
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ─── Data Sanitization ───────────────────────────────────────
-// Custom NoSQL injection prevention
-app.use((req, res, next) => {
-  const sanitizeObject = (obj) => {
-    if (!obj || typeof obj !== 'object') return obj;
-    
-    const sanitized = {};
-    for (const key in obj) {
-      if (key.includes('$') || key.includes('.')) {
-        console.warn(`[Security] Blocked NoSQL injection attempt: ${key} from ${req.ip}`);
-        continue; // Skip this key
-      }
-      
-      if (typeof obj[key] === 'object' && obj[key] !== null) {
-        sanitized[key] = sanitizeObject(obj[key]);
-      } else {
-        sanitized[key] = obj[key];
-      }
-    }
-    return sanitized;
-  };
-
-  // Sanitize request body (this is mutable)
-  if (req.body && typeof req.body === 'object') {
-    req.body = sanitizeObject(req.body);
-  }
-  
-  // For query params, we'll validate them in controllers instead
-  // since req.query is read-only
-  
-  next();
-});
-
-// Basic XSS protection - sanitize HTML entities
-app.use((req, res, next) => {
-  const sanitizeString = (str) => {
-    if (typeof str !== 'string') return str;
-    return str
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#x27;')
-      .replace(/\//g, '&#x2F;');
-  };
-
-  const sanitizeObject = (obj) => {
-    if (!obj || typeof obj !== 'object') return obj;
-    
-    for (const key in obj) {
-      if (typeof obj[key] === 'string') {
-        obj[key] = sanitizeString(obj[key]);
-      } else if (typeof obj[key] === 'object') {
-        sanitizeObject(obj[key]);
-      }
-    }
-    return obj;
-  };
-
-  // Only sanitize request body, not response
-  if (req.body) {
-    req.body = sanitizeObject(req.body);
-  }
-  
-  next();
-});
-
-// ─── API Routes ──────────────────────────────────────────────
+// ─── API Routes (MUST BE BEFORE STATIC FILES) ────────────────
 app.use("/api/auth", authRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/reservations", reservationRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.get("/api/health", (req, res) => res.json({ success: true, message: "API running" }));
 
-// ─── Health Check ─────────────────────────────────────────────
-app.get("/api/health", (req, res) => {
-  res.json({ success: true, message: "SecureStay API is running" });
-});
-
-// ─── Simple test endpoint ─────────────────────────────────────
-app.post("/api/test", (req, res) => {
-  console.log('Test endpoint hit with body:', req.body);
-  res.json({ success: true, message: "Test successful", body: req.body });
-});
-
-// ─── Debug endpoint to check build files ─────────────────────
-app.get("/api/debug/files", async (req, res) => {
-  const fs = await import('fs');
-  const clientPath = path.join(__dirname, '../client/dist');
-  try {
-    const files = fs.readdirSync(clientPath);
-    res.json({ 
-      success: true, 
-      path: clientPath,
-      files: files,
-      nodeEnv: process.env.NODE_ENV 
-    });
-  } catch (error) {
-    res.json({ 
-      success: false, 
-      path: clientPath,
-      error: error.message,
-      nodeEnv: process.env.NODE_ENV 
-    });
-  }
-});
-
-// ─── Debug endpoint to check user exists ─────────────────────
-app.get("/api/debug/user/:email", async (req, res) => {
-  try {
-    const User = (await import('./models/User.js')).default;
-    const user = await User.findOne({ email: req.params.email });
-    res.json({ 
-      success: true, 
-      exists: !!user,
-      email: req.params.email,
-      hasBrevoKey: !!process.env.BREVO_API_KEY
-    });
-  } catch (error) {
-    res.json({ 
-      success: false, 
-      error: error.message 
-    });
-  }
-});
-
-// ─── Serve Frontend in Production ────────────────────────────
+// ─── Serve Frontend (ONLY IN PRODUCTION) ─────────────────────
 if (process.env.NODE_ENV === 'production') {
   const clientPath = path.join(__dirname, '../client/dist');
-  console.log('Serving static files from:', clientPath);
-  
-  // Serve static files for non-API routes
-  app.use((req, res, next) => {
-    if (req.path.startsWith('/api')) {
-      return next();
-    }
-    express.static(clientPath)(req, res, next);
-  });
-  
-  // Catch-all for SPA - use middleware instead of app.get('*')
-  app.use((req, res, next) => {
-    if (req.path.startsWith('/api')) {
-      return next();
-    }
-    console.log('Serving index.html for:', req.path);
-    res.sendFile(path.join(clientPath, 'index.html'));
-  });
+  app.use(express.static(clientPath));
+  app.use((req, res) => res.sendFile(path.join(clientPath, 'index.html')));
+} else {
+  app.use((req, res) => res.status(404).json({ success: false, message: "Route not found" }));
 }
 
-// ─── 404 Handler for Development ─────────────────────────────
-if (process.env.NODE_ENV !== 'production') {
-  app.use((req, res) => {
-    res.status(404).json({ success: false, message: "Route not found" });
-  });
-}
-
-// ─── Centralized Error Handler ────────────────────────────────
+// ─── Error Handler ───────────────────────────────────────────
 app.use(errorHandler);
 
-// ─── Start Server ─────────────────────────────────────────────
+// ─── Start Server ────────────────────────────────────────────
 try {
   await connectDB();
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ SecureStay server running on port ${PORT}`);
-  });
+  app.listen(PORT, '0.0.0.0', () => console.log(`✅ Server running on port ${PORT}`));
 } catch (error) {
   console.error("❌ Database connection failed:", error);
   process.exit(1);
