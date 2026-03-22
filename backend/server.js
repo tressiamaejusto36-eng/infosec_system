@@ -126,6 +126,12 @@ app.get("/api/health", (req, res) => {
   res.json({ success: true, message: "SecureStay API is running" });
 });
 
+// ─── Simple test endpoint ─────────────────────────────────────
+app.post("/api/test", (req, res) => {
+  console.log('Test endpoint hit with body:', req.body);
+  res.json({ success: true, message: "Test successful", body: req.body });
+});
+
 // ─── Debug endpoint to check build files ─────────────────────
 app.get("/api/debug/files", async (req, res) => {
   const fs = await import('fs');
@@ -174,8 +180,12 @@ if (process.env.NODE_ENV === 'production') {
   
   app.use(express.static(clientPath));
   
-  // Catch-all route for SPA - must be after API routes
-  app.use((req, res) => {
+  // Catch-all route for SPA - only for non-API routes
+  app.use((req, res, next) => {
+    // Don't catch API routes
+    if (req.url.startsWith('/api/')) {
+      return next();
+    }
     console.log('Serving index.html for:', req.url);
     res.sendFile(path.join(clientPath, 'index.html'));
   });
