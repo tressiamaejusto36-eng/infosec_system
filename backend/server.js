@@ -28,7 +28,9 @@ const PORT = process.env.PORT || 5000;
 // ─── Security Middleware ─────────────────────────────────────
 app.use(helmet());
 app.use(cors({
-  origin: "http://localhost:5173",
+  origin: process.env.NODE_ENV === 'production' 
+    ? process.env.FRONTEND_URL || true 
+    : "http://localhost:5173",
   credentials: true,
 }));
 app.use(globalLimiter);
@@ -121,10 +123,48 @@ app.get("/api/health", (req, res) => {
   res.json({ success: true, message: "SecureStay API is running" });
 });
 
-// ─── 404 Handler ─────────────────────────────────────────────
-app.use((req, res) => {
-  res.status(404).json({ success: false, message: "Route not found" });
+// ─── Debug endpoint to check build files ─────────────────────
+app.get("/api/debug/files", async (req, res) => {
+  const fs = await import('fs');
+  const clientPath = path.join(__dirname, '../client/dist');
+  try {
+    const files = fs.readdirSync(clientPath);
+    res.json({ 
+      success: true, 
+      path: clientPath,
+      files: files,
+      nodeEnv: process.env.NODE_ENV 
+    });
+  } catch (error) {
+    res.json({ 
+      success: false, 
+      path: clientPath,
+      error: error.message,
+      nodeEnv: process.env.NODE_ENV 
+    });
+  }
 });
+
+// ─── Serve Frontend in Production ────────────────────────────
+if (process.env.NODE_ENV === 'production') {
+  const clientPath = path.join(__dirname, '../client/dist');
+  console.log('Serving static files from:', clientPath);
+  
+  app.use(express.static(clientPath));
+  
+  // Catch-all route must be after API routes
+  app.get('*', (req, res) => {
+    console.log('Serving index.html for:', req.url);
+    res.sendFile(path.join(clientPath, 'index.html'));
+  });
+}
+
+// ─── 404 Handler for Development ─────────────────────────────
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res) => {
+    res.status(404).json({ success: false, message: "Route not found" });
+  });
+}
 
 // ─── Centralized Error Handler ────────────────────────────────
 app.use(errorHandler);
