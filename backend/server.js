@@ -26,7 +26,18 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // ─── Security Middleware ─────────────────────────────────────
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://www.google.com", "https://www.gstatic.com"],
+      frameSrc: ["'self'", "https://www.google.com"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'"],
+    },
+  },
+}));
 app.use(cors({
   origin: process.env.NODE_ENV === 'production' 
     ? 'https://securestay.onrender.com'
